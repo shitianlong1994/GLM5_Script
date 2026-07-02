@@ -32,9 +32,9 @@ def get_rank_table(global_rank_table_path):
 
 def get_p_and_d_ips():
 
-    return "192.168.0.203" , "192.168.0.50"
+    return "192.168.0.203" ,"192.168.0.194", "192.168.0.50", "192.168.0.78"
 
 if __name__ == '__main__':
-    p_ip, d_ip = get_p_and_d_ips()
+    ip_list = get_p_and_d_ips()
     # 以空格分隔输出，Shell 可以直接 read 到两个变量中
-    print(f"{p_ip} {d_ip}")
+    print(f"{ip_list[0]} {ip_list[1]} {ip_list[2]} {ip_list[3]}")

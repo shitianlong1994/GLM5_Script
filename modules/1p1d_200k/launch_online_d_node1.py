@@ -71,7 +71,7 @@ vllm_start_port = args.vllm_start_port
 def run_command(visible_devices, dp_rank, vllm_engine_port):
     command = [
         "bash",
-        "../../modules/1p1d_200k/run_p_template.sh",
+        "../../modules/1p1d_200k/run_d_template_node1.sh",
         visible_devices,
         str(vllm_engine_port),
         str(dp_size),
@@ -83,7 +83,7 @@ def run_command(visible_devices, dp_rank, vllm_engine_port):
     subprocess.run(command, check=True)
 
 if __name__ == "__main__":
-    template_path = "../../modules/1p1d_200k/run_p_template.sh"
+    template_path = "../../modules/1p1d_200k/run_d_template_node1.sh"
     if not os.path.exists(template_path):
         print(f"Template file {template_path} does not exist.")
         sys.exit(1)

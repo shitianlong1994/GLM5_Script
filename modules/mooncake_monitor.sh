@@ -6,10 +6,7 @@ MASTER_ADDR=""
 OUTPUT_FILE=""
 JSON_OUTPUT=""
 LOOP_INTERVAL=0
-TREND_INTERVAL=0
-TREND_COUNT=0
 ETCD_KEY="mooncake-store/mooncake/master_view"
-TREND_DATA_FILE=""
 
 show_help() {
     cat <<EOF
@@ -23,8 +20,6 @@ Options:
   -o, --output FILE            Output dashboard to file (default: stdout)
   --json-output FILE           Output JSON data to file
   --loop SECONDS               Run in loop mode with interval in seconds (default: 0, single run)
-  --trend-interval SECONDS     Trend mode: collection interval in seconds (default: 30)
-  --trend-count COUNT          Trend mode: number of collections (default: 10)
   -h, --help                   Show this help message
 
 Examples:
@@ -32,7 +27,6 @@ Examples:
   bash mooncake_monitor.sh --master-addr 172.16.0.175:54050
   bash mooncake_monitor.sh --etcd-endpoints "etcd0:32379" -o dashboard.txt --json-output dashboard.json
   bash mooncake_monitor.sh --master-addr 172.16.0.175:54050 --loop 30 -o dashboard.txt
-  bash mooncake_monitor.sh --master-addr 172.16.0.175:54050 --trend-interval 30 --trend-count 10
 
   Note: metrics port is auto-calculated as master service port + 2
 EOF
@@ -50,10 +44,6 @@ while [[ $# -gt 0 ]]; do
             JSON_OUTPUT="$2"; shift 2 ;;
         --loop)
             LOOP_INTERVAL="$2"; shift 2 ;;
-        --trend-interval)
-            TREND_INTERVAL="$2"; shift 2 ;;
-        --trend-count)
-            TREND_COUNT="$2"; shift 2 ;;
         -h|--help)
             show_help; exit 0 ;;
         *)
@@ -66,12 +56,11 @@ if [ -z "$ETCD_ENDPOINTS" ] && [ -z "$MASTER_ADDR" ]; then
 fi
 
 fmt_bytes() {
-    local b=${1:-0}
+    local b=$1
     if [ "$b" = "N/A" ] || [ -z "$b" ]; then
         echo "N/A"
         return
     fi
-    b=$(echo "$b" | awk '{printf "%.0f", $1+0}')
     if [ "$b" -ge 1099511627776 ] 2>/dev/null; then
         echo "$(awk "BEGIN{printf \"%.2f\", $b/1099511627776}") TB"
     elif [ "$b" -ge 1073741824 ] 2>/dev/null; then
@@ -305,8 +294,7 @@ Remove:master_remove_requests_total:master_remove_failures_total
 RemoveAll:master_remove_all_requests_total:master_remove_all_failures_total
 Ping:master_ping_requests_total:master_ping_failures_total
 MountSegment:master_mount_segment_requests_total:master_mount_segment_failures_total
-UnmountSegment:master_unmount_segment_requests_total:master_unmount_segment_failures_total
-RemountSegment:master_remount_segment_requests_total:master_remount_segment_failures_total"
+UnmountSegment:master_unmount_segment_requests_total:master_unmount_segment_failures_total"
 
         echo "$req_pairs" | while IFS=: read name req_m fail_m; do
             local rv=$(get_metric "$raw" "$req_m")
@@ -328,8 +316,7 @@ BatchPutRevoke:master_batch_put_revoke_requests_total:master_batch_put_revoke_fa
 BatchExistKey:master_batch_exist_key_requests_total:master_batch_exist_key_failures_total
 BatchGetReplicaList:master_batch_get_replica_list_requests_total:master_batch_get_replica_list_failures_total
 BatchQueryIp:master_batch_query_ip_requests_total:master_batch_query_ip_failures_total
-BatchReplicaClear:master_batch_replica_clear_requests_total:master_batch_replica_clear_failures_total
-EvictDiskReplica:master_evict_disk_replica_requests_total:master_evict_disk_replica_failures_total"
+BatchReplicaClear:master_batch_replica_clear_requests_total:master_batch_replica_clear_failures_total"
 
         echo "$batch_pairs" | while IFS=: read name req_m fail_m; do
             local rv=$(get_metric "$raw" "$req_m")
@@ -349,30 +336,6 @@ EvictDiskReplica:master_evict_disk_replica_requests_total:master_evict_disk_repl
         echo "  Evicted Size:          $(fmt_bytes ${evicted_size:-0})"
         echo "  PutStart Discard Cnt:  ${discard_cnt:-0}"
         echo "  PutStart Release Cnt:  ${release_cnt:-0}"
-
-        local alloc_fail
-        alloc_fail=$(get_metric "$raw" "master_put_start_alloc_failures_total")
-        echo "  PutStart Alloc Fails:  ${alloc_fail:-0}"
-
-        echo ""
-        echo "--- HA Status ---"
-        local ha_standby ha_transitions ha_oplog_lag ha_oplog_pending ha_mutation_queue
-        ha_standby=$(get_metric "$raw" "ha_standby_state")
-        ha_transitions=$(get_metric "$raw" "ha_state_transitions_total")
-        ha_oplog_lag=$(get_metric "$raw" "ha_oplog_standby_lag")
-        ha_oplog_pending=$(get_metric "$raw" "ha_oplog_pending_entries")
-        ha_mutation_queue=$(get_metric "$raw" "ha_pending_mutation_queue_size")
-        if [ -n "$ha_standby" ] || [ -n "$ha_transitions" ]; then
-            local role="Primary"
-            [ "${ha_standby:-0}" = "1" ] && role="Standby"
-            echo "  Role:                ${role}"
-            echo "  State Transitions:   ${ha_transitions:-0}"
-            echo "  OpLog Standby Lag:   ${ha_oplog_lag:-N/A}"
-            echo "  OpLog Pending:       ${ha_oplog_pending:-N/A}"
-            echo "  Mutation Queue Size: ${ha_mutation_queue:-N/A}"
-        else
-            echo "  HA not configured (single master mode)"
-        fi
 
         echo ""
         echo "--- Move/Copy Task Statistics ---"
@@ -454,264 +417,18 @@ EOFJ
     fi
 }
 
-extract_trend_metrics() {
-    local raw=$1
-    local now=$(TZ='Asia/Shanghai' date '+%H:%M:%S')
-
-    local allocated capacity key_count active_clients
-    allocated=$(get_metric "$raw" "master_allocated_bytes")
-    capacity=$(get_metric "$raw" "master_total_capacity_bytes")
-    key_count=$(get_metric "$raw" "master_key_count")
-    active_clients=$(get_metric "$raw" "master_active_clients")
-
-    local seg_stats
-    seg_stats=$(echo "$raw" | awk '
-        /^segment_allocated_bytes\{/ {
-            match($0, /segment="([^"]+)"/, m); seg=m[1];
-            alloc[seg]=$NF+0
-        }
-        /^segment_total_capacity_bytes\{/ {
-            match($0, /segment="([^"]+)"/, m); seg=m[1];
-            cap[seg]=$NF+0
-        }
-        END {
-            total=0; active=0
-            for(seg in alloc) {
-                if(alloc[seg]==0 && cap[seg]==0) continue
-                total++
-                if(alloc[seg]>0) active++
-            }
-            printf "%d %d", total, active
-        }')
-    local total_segs=$(echo "$seg_stats" | cut -d' ' -f1)
-    local active_segs=$(echo "$seg_stats" | cut -d' ' -f2)
-
-    local put_start put_end get_replica mount_seg evict_attempted evict_successful alloc_fail
-    put_start=$(get_metric "$raw" "master_put_start_requests_total")
-    put_end=$(get_metric "$raw" "master_put_end_requests_total")
-    get_replica=$(get_metric "$raw" "master_get_replica_list_requests_total")
-    mount_seg=$(get_metric "$raw" "master_mount_segment_requests_total")
-    evict_attempted=$(get_metric "$raw" "master_attempted_evictions_total")
-    evict_successful=$(get_metric "$raw" "master_successful_evictions_total")
-    alloc_fail=$(get_metric "$raw" "master_put_start_alloc_failures_total")
-
-    local mem_usage="0"
-    allocated=${allocated:-0}
-    capacity=${capacity:-0}
-    key_count=${key_count:-0}
-    active_clients=${active_clients:-0}
-    put_start=${put_start:-0}
-    put_end=${put_end:-0}
-    get_replica=${get_replica:-0}
-    mount_seg=${mount_seg:-0}
-    evict_attempted=${evict_attempted:-0}
-    evict_successful=${evict_successful:-0}
-    alloc_fail=${alloc_fail:-0}
-    total_segs=${total_segs:-0}
-    active_segs=${active_segs:-0}
-    if [ -n "$capacity" ] && [ "$capacity" != "0" ] && [ "$capacity" -gt 0 ] 2>/dev/null; then
-        mem_usage=$(awk "BEGIN{printf \"%.2f\", ${allocated}/${capacity}*100}")
-    fi
-
-    echo "${now}|${allocated}|${capacity}|${mem_usage}|${key_count}|${active_clients}|${total_segs}|${active_segs}|${put_start}|${put_end}|${get_replica}|${mount_seg}|${evict_attempted}|${evict_successful}|${alloc_fail}"
-}
-
-build_trend_report() {
-    local data_file=$1 master_addr=$2 interval=$3 count=$4
-    local now=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S CST')
-
-    {
-        echo "================================================================================"
-        echo "  Mooncake Master Trend Report"
-        echo "  Time: ${now}  |  Master: ${master_addr}"
-        echo "  Collection: ${count} samples @ ${interval}s interval (total ~$((interval * count))s)"
-        echo "================================================================================"
-        echo ""
-
-        local n_lines
-        n_lines=$(wc -l < "$data_file" 2>/dev/null || echo 0)
-        if [ "$n_lines" -lt 1 ]; then
-            echo "  No data collected."
-            echo "================================================================================"
-            return
-        fi
-
-        echo "--- Memory Usage Trend ---"
-        printf "  %-10s %12s %12s %10s\n" "Time" "Allocated" "Capacity" "Usage%"
-        printf "  %-10s %12s %12s %10s\n" "----------" "------------" "------------" "----------"
-        while IFS='|' read ts alloc cap usage rest; do
-            printf "  %-10s %12s %12s %10s\n" "$ts" "$(fmt_bytes $alloc)" "$(fmt_bytes $cap)" "${usage}%"
-        done < "$data_file"
-
-        echo ""
-        echo "--- Segment Trend ---"
-        printf "  %-10s %10s %10s\n" "Time" "Total" "Active"
-        printf "  %-10s %10s %10s\n" "----------" "----------" "----------"
-        while IFS='|' read ts _ _ _ _ _ total active rest; do
-            printf "  %-10s %10s %10s\n" "$ts" "$total" "$active"
-        done < "$data_file"
-
-        echo ""
-        echo "--- Key & Client Trend ---"
-        printf "  %-10s %10s %10s\n" "Time" "Keys" "Clients"
-        printf "  %-10s %10s %10s\n" "----------" "----------" "----------"
-        while IFS='|' read ts _ _ _ keys clients rest; do
-            printf "  %-10s %10s %10s\n" "$ts" "$keys" "$clients"
-        done < "$data_file"
-
-        echo ""
-        echo "--- Request Rate Trend (requests/interval) ---"
-        printf "  %-10s %10s %10s %10s %10s\n" "Time" "PutStart" "PutEnd" "GetReplL" "MountSeg"
-        printf "  %-10s %10s %10s %10s %10s\n" "----------" "----------" "----------" "----------" "----------"
-
-        local prev_put_start="" prev_put_end="" prev_get_rep="" prev_mount=""
-        while IFS='|' read ts _ _ _ _ _ _ _ put_start put_end get_rep mount rest; do
-            put_start=${put_start:-0}; put_end=${put_end:-0}; get_rep=${get_rep:-0}; mount=${mount:-0}
-            if [ -z "$prev_put_start" ]; then
-                printf "  %-10s %10s %10s %10s %10s\n" "$ts" "-" "-" "-" "-"
-            else
-                local d_ps=$((put_start - prev_put_start))
-                local d_pe=$((put_end - prev_put_end))
-                local d_gr=$((get_rep - prev_get_rep))
-                local d_ms=$((mount - prev_mount))
-                printf "  %-10s %10d %10d %10d %10d\n" "$ts" "$d_ps" "$d_pe" "$d_gr" "$d_ms"
-            fi
-            prev_put_start=$put_start
-            prev_put_end=$put_end
-            prev_get_rep=$get_rep
-            prev_mount=$mount
-        done < "$data_file"
-
-        echo ""
-        echo "--- Eviction & Failure Trend (delta per interval) ---"
-        printf "  %-10s %10s %10s %10s\n" "Time" "EvictAtmp" "EvictSucc" "AllocFail"
-        printf "  %-10s %10s %10s %10s\n" "----------" "----------" "----------" "----------"
-
-        local prev_ea="" prev_es="" prev_af=""
-        while IFS='|' read ts _ _ _ _ _ _ _ _ _ _ _ ea es af; do
-            ea=${ea:-0}; es=${es:-0}; af=${af:-0}
-            if [ -z "$prev_ea" ]; then
-                printf "  %-10s %10s %10s %10s\n" "$ts" "-" "-" "-"
-            else
-                local d_ea=$((ea - prev_ea))
-                local d_es=$((es - prev_es))
-                local d_af=$((af - prev_af))
-                printf "  %-10s %10d %10d %10d\n" "$ts" "$d_ea" "$d_es" "$d_af"
-            fi
-            prev_ea=$ea
-            prev_es=$es
-            prev_af=$af
-        done < "$data_file"
-
-        echo ""
-        echo "--- Trend Summary ---"
-        local first_line last_line
-        first_line=$(head -1 "$data_file")
-        last_line=$(tail -1 "$data_file")
-
-        local f_alloc=0 f_cap=0 f_usage=0 f_keys=0 f_clients=0 f_total=0 f_active=0 f_ps=0 f_pe=0 f_gr=0 f_ms=0 f_ea=0 f_es=0 f_af=0
-        IFS='|' read f_ts f_alloc f_cap f_usage f_keys f_clients f_total f_active f_ps f_pe f_gr f_ms f_ea f_es f_af <<< "$first_line"
-
-        local l_alloc=0 l_cap=0 l_usage=0 l_keys=0 l_clients=0 l_total=0 l_active=0 l_ps=0 l_pe=0 l_gr=0 l_ms=0 l_ea=0 l_es=0 l_af=0
-        IFS='|' read l_ts l_alloc l_cap l_usage l_keys l_clients l_total l_active l_ps l_pe l_gr l_ms l_ea l_es l_af <<< "$last_line"
-
-        f_alloc=${f_alloc:-0}; f_keys=${f_keys:-0}; f_clients=${f_clients:-0}; f_active=${f_active:-0}
-        f_ps=${f_ps:-0}; f_ea=${f_ea:-0}; f_af=${f_af:-0}
-        l_alloc=${l_alloc:-0}; l_keys=${l_keys:-0}; l_clients=${l_clients:-0}; l_active=${l_active:-0}
-        l_ps=${l_ps:-0}; l_ea=${l_ea:-0}; l_af=${l_af:-0}
-
-        local d_alloc=$((l_alloc - f_alloc))
-        local d_keys=$((l_keys - f_keys))
-        local d_clients=$((l_clients - f_clients))
-        local d_active=$((l_active - f_active))
-        local d_ps=$((l_ps - f_ps))
-        local d_ea=$((l_ea - f_ea))
-        local d_af=$((l_af - f_af))
-
-        echo "  Memory Alloc Delta:  $(fmt_bytes ${d_alloc#-}) (${d_alloc} bytes)"
-        if [ "$d_alloc" -gt 0 ]; then
-            echo "  Memory Trend:        INCREASING"
-        elif [ "$d_alloc" -lt 0 ]; then
-            echo "  Memory Trend:        DECREASING"
-        else
-            echo "  Memory Trend:        STABLE"
-        fi
-
-        echo "  Key Count Delta:     ${d_keys}"
-        echo "  Active Segs Delta:   ${d_active}"
-        echo "  Client Count Delta:  ${d_clients}"
-        echo "  PutStart Total Delta:${d_ps}"
-        echo "  Eviction Total Delta:${d_ea}"
-        echo "  AllocFail Total Delta:${d_af}"
-
-        if [ "$d_af" -gt 0 ]; then
-            echo "  *** WARNING: ${d_af} new allocation failures detected during observation ***"
-        fi
-        if [ "$d_ea" -gt 0 ] && [ "$d_ps" -gt 0 ]; then
-            local evict_pct=$(awk "BEGIN{printf \"%.2f\", $d_ea/$d_ps*100}")
-            echo "  Eviction/PutStart:   ${evict_pct}% (eviction pressure indicator)"
-        fi
-
-        echo ""
-        echo "================================================================================"
-    }
-}
-
 main() {
-    local master_addr="$MASTER_ADDR"
-    if [ -z "$master_addr" ]; then
-        master_addr=$(discover_master) || master_addr=$(discover_master_etcdctl) || {
-            echo "ERROR: Failed to discover master address from etcd" >&2
-            exit 1
-        }
-    fi
-
-    if [ "$TREND_INTERVAL" -gt 0 ] && [ "$TREND_COUNT" -gt 0 ]; then
-        TREND_DATA_FILE=$(mktemp 2>/dev/null || echo "/tmp/mooncake_trend_$$_$(date +%s)")
-        trap "rm -f '$TREND_DATA_FILE'" EXIT
-        : > "$TREND_DATA_FILE"
-
-        echo "Trend mode: collecting ${TREND_COUNT} samples @ ${TREND_INTERVAL}s interval (total ~$((TREND_INTERVAL * TREND_COUNT))s)" >&2
-
-        local i=0
-        while [ "$i" -lt "$TREND_COUNT" ]; do
-            local raw
-            raw=$(fetch_metrics "$master_addr") || raw=""
-            if [ -z "$raw" ]; then
-                echo "WARN: Failed to fetch metrics at sample $((i+1))" >&2
-            else
-                extract_trend_metrics "$raw" >> "$TREND_DATA_FILE" || echo "WARN: Failed to parse sample $((i+1))" >&2
-                echo "  Sample $((i+1))/${TREND_COUNT} collected" >&2
-            fi
-
-            i=$((i + 1))
-            [ "$i" -lt "$TREND_COUNT" ] && sleep "$TREND_INTERVAL"
-        done
-
-        local last_raw
-        last_raw=$(fetch_metrics "$master_addr") || last_raw=""
-
-        if [ -n "$OUTPUT_FILE" ]; then
-            if [ -n "$last_raw" ]; then
-                build_dashboard "$last_raw" "$master_addr" > "$OUTPUT_FILE" || true
-            fi
-            build_trend_report "$TREND_DATA_FILE" "$master_addr" "$TREND_INTERVAL" "$TREND_COUNT" >> "$OUTPUT_FILE" || true
-            echo "Dashboard + Trend report written to ${OUTPUT_FILE}"
-        else
-            if [ -n "$last_raw" ]; then
-                build_dashboard "$last_raw" "$master_addr" || true
-            fi
-            build_trend_report "$TREND_DATA_FILE" "$master_addr" "$TREND_INTERVAL" "$TREND_COUNT" || true
-        fi
-
-        if [ -n "$JSON_OUTPUT" ]; then
-            echo "WARN: --json-output not supported in trend mode, use single run or --loop mode" >&2
-        fi
-
-        return
-    fi
-
     while true; do
+        local master_addr="$MASTER_ADDR"
+        if [ -z "$master_addr" ]; then
+            master_addr=$(discover_master) || master_addr=$(discover_master_etcdctl) || {
+                echo "ERROR: Failed to discover master address from etcd" >&2
+                [ "$LOOP_INTERVAL" = "0" ] && exit 1
+                sleep "$LOOP_INTERVAL"
+                continue
+            }
+        fi
+
         local raw
         raw=$(fetch_metrics "$master_addr")
         if [ -z "$raw" ]; then

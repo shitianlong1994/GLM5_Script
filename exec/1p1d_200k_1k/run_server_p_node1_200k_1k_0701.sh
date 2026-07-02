@@ -66,12 +66,12 @@ export LD_LIBRARY_PATH=/usr/local/Ascend/ascend-toolkit/latest/python/site-packa
 export VLLM_ASCEND_ENABLE_FLASHCOMM1=1
 
 # 执行拉起python脚本
-python  ../../modules/1p1d_200k/launch_online_p.py \
-    --dp-size 2 \
+python  ../../modules/1p1d_200k/launch_online_p_node1.py \
+    --dp-size 4 \
     --tp-size 8 \
     --dp-size-local 2 \
-    --dp-rank-start 0 \
-    --dp-address "$local_ip" \
+    --dp-rank-start 2 \
+    --dp-address 192.168.0.203 \
     --dp-rpc-port 10521 \
     --vllm-start-port 6700 \
     --nic_name "$nic_name"

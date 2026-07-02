@@ -68,12 +68,12 @@ export TASK_QUEUE_ENABLE=1
 
 
 # 执行拉起python脚本
-python  ../../modules/1p1d_200k/launch_online_d.py \
+python  ../../modules/1p1d_200k/launch_online_d_node1.py \
     --dp-size 8 \
-    --tp-size 2 \
-    --dp-size-local 8 \
-    --dp-rank-start 0 \
-    --dp-address "$local_ip" \
+    --tp-size 4 \
+    --dp-size-local 4 \
+    --dp-rank-start 4 \
+    --dp-address 192.168.0.50 \
     --dp-rpc-port 10523 \
     --vllm-start-port 6721 \
     --nic_name "$nic_name" 

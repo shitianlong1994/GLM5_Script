@@ -83,7 +83,7 @@ vllm serve /mnt/sfs_turbo_glm5/model/GLM-5.2-w8a8 \
     --enable-expert-parallel \
     --seed 1024 \
     --served-model-name glm-52 \
-    --max-model-len 135000 \
+    --max-model-len 204800 \
     --speculative-config '{"num_speculative_tokens": 5, "method":"deepseek_mtp"}' \
     --additional-config '{"enable_sparse_c8":false,"fuse_muls_add": true, "multistream_overlap_shared_expert": true, "recompute_scheduler_enable": true, "layer_sharding":["q_b_proj","o_proj"], "ascend_compilation_config": {"enable_npugraph_ex": true},"enable_dsa_cp": true}' \
     --max-num-batched-tokens 4096 \
@@ -95,7 +95,7 @@ vllm serve /mnt/sfs_turbo_glm5/model/GLM-5.2-w8a8 \
     --enable-prefix-caching \
     --enable-prompt-tokens-details \
     --quantization ascend \
-    --gpu-memory-utilization 0.92 \
+    --gpu-memory-utilization 0.95 \
     --enable-auto-tool-choice \
     --tool-call-parser glm47 \
     --reasoning-parser glm45 \

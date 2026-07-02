@@ -92,10 +92,10 @@ vllm serve /mnt/sfs_turbo_glm5/model/GLM-5.2-w8a8 \
     --enable-prompt-tokens-details \
     --seed 1024 \
     --served-model-name glm-52 \
-    --max-model-len 100000 \
-    --max-num-batched-tokens 32 \
-    --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY", "cudagraph_capture_sizes":[4, 8, 16, 24, 32]}' \
-    --speculative-config '{"num_speculative_tokens": 3, "method":"deepseek_mtp"}' \
+    --max-model-len 204800 \
+    --max-num-batched-tokens 48 \
+    --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY"}' \
+    --speculative-config '{"num_speculative_tokens": 5, "method":"deepseek_mtp"}' \
     --additional-config '{"enable_sparse_c8":false,"fuse_muls_add": true, "multistream_overlap_shared_expert": true, "recompute_scheduler_enable": true, "ascend_compilation_config": {"enable_npugraph_ex": true}}' \
     --trust-remote-code \
     --max-num-seqs 8 \

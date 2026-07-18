@@ -1,26 +1,13 @@
-此脚本为glm5.2-w4a8c8 memcache部署方案
-
-参考:[glm5.1 4机池化方案](https://gitcode.com/Ascend/memcache/wiki/MMC%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5%E2%80%94GLM-5.1+A3-4%E6%9C%BAPD%E5%88%86%E7%A6%BB.md)
+此脚本为glm5.2-w4a8c8 mooncake部署方案
 
 # 脚本部署
-## memcache服务拉起
-脚本在:`GLM5_Script/exec/memcache_pool`
-1. 在p主节点启动meta服务
+## mooncake服务拉起
+脚本在:`GLM5_Script/exec/mooncache_pool`
+1. 在p主节点启动mooncake master服务
 ```bash
-cd GLM5_Script/exec/memcache_pool
+cd GLM5_Script/exec/mooncache_pool
 # host_ip为P节点ip
-bash run_meta_service.sh --${host_ip}
-```
-2. 在p节点和d节点分别启动local服务
-在P节点
-```bash
-cd GLM5_Script/exec/memcache_pool
-bash run_standalone.sh
-```
-在D节点
-```bash
-cd GLM5_Script/exec/memcache_pool
-bash run_standalone.sh
+bash run_master_service.sh --${host_ip}
 ```
 
 ## vllm服务拉起

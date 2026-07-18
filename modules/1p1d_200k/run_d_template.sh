@@ -44,11 +44,9 @@ export ASCEND_ENABLE_USE_FABRIC_MEM=1
 # export HCCL_INTRA_ROCE_ENABLE=1
 export VLLM_NIXL_ABORT_REQUEST_TIMEOUT=300000
 export PYTHONHASHSEED=0
+moon_cake_config=$(realpath ../../modules/mooncake.json)
+export MOONCAKE_CONFIG_PATH=$moon_cake_config
 
-local_config_path=$(realpath ../../modules/mmc-local.conf)
-meta_config_path=$(realpath ../../modules/mmc-meta.conf)
-export MMC_LOCAL_CONFIG_PATH=$local_config_path
-export MMC_META_CONFIG_PATH=$meta_config_path
 
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib:/usr/local/lib64
@@ -95,7 +93,7 @@ vllm serve /mnt/sfs_turbo/model/GLM-5.2-w4a8c8-0716/ \
     --max-num-seqs 48 \
     --gpu-memory-utilization 0.92 \
     --async-scheduling \
-    --enable-prefix-caching \
+    --no-enable-prefix-caching \
     --quantization ascend \
     --enable-auto-tool-choice \
     --tool-call-parser glm47 \
@@ -127,7 +125,7 @@ vllm serve /mnt/sfs_turbo/model/GLM-5.2-w4a8c8-0716/ \
                 "kv_role": "kv_consumer",
                 "kv_connector_extra_config": {
                     "lookup_rpc_port":"0",
-                    "backend": "memcache"
+                    "backend": "mooncake"
                 }
             }
         ]

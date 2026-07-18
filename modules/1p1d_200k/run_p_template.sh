@@ -31,17 +31,14 @@ export HCCL_SOCKET_IFNAME=$nic_name
 export OMP_PROC_BIND=false
 export OMP_NUM_THREADS=1
 export PYTHONHASHSEED=0
-# export MOONCAKE_CONFIG_PATH="../mooncake.json"
-local_config_path=$(realpath ../../modules/mmc-local.conf)
-meta_config_path=$(realpath ../../modules/mmc-meta.conf)
-export MMC_LOCAL_CONFIG_PATH=$local_config_path
-export MMC_META_CONFIG_PATH=$meta_config_path
+moon_cake_config=$(realpath ../../modules/mooncake.json)
+export MOONCAKE_CONFIG_PATH=$moon_cake_config
 
 export PYTORCH_NPU_ALLOC_CONF=expandable_segments:True
 export HCCL_BUFFSIZE=512
 export ACL_OP_INIT_MODE=1
 export ASCEND_A3_ENABLE=1
-# export ASCEND_ENABLE_USE_FABRIC_MEM=1
+export ASCEND_ENABLE_USE_FABRIC_MEM=1
 # export HCCL_INTRA_ROCE_ENABLE=1
 export VLLM_NIXL_ABORT_REQUEST_TIMEOUT=300000
 
@@ -121,7 +118,7 @@ vllm serve /mnt/sfs_turbo/model/GLM-5.2-w4a8c8-0716/ \
                 "kv_role": "kv_producer",
                 "kv_connector_extra_config": {
                     "lookup_rpc_port":"0",
-                    "backend": "memcache"
+                    "backend": "mooncake"
                 }
             }
         ]

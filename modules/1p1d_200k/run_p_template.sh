@@ -30,9 +30,6 @@ export HCCL_SOCKET_IFNAME=$nic_name
 
 export OMP_PROC_BIND=false
 export OMP_NUM_THREADS=1
-export PYTHONHASHSEED=0
-moon_cake_config=$(realpath ../../modules/mooncake.json)
-export MOONCAKE_CONFIG_PATH=$moon_cake_config
 
 export PYTORCH_NPU_ALLOC_CONF=expandable_segments:True
 export HCCL_BUFFSIZE=512
@@ -44,7 +41,7 @@ export VLLM_NIXL_ABORT_REQUEST_TIMEOUT=300000
 
 export ASCEND_RT_VISIBLE_DEVICES=$1
 export VLLM_ASCEND_ENABLE_FLASHCOMM1=1
-export VLLM_ASCEND_ENABLE_FUSED_MC2=0
+export VLLM_ASCEND_ENABLE_FUSED_MC2=1
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 export VLLM_ASCEND_ENABLE_SFA_KV_QUANT_SPARSE_ATTENTION=1
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib:/usr/local/lib64
@@ -77,7 +74,10 @@ vllm serve /mnt/sfs_turbo/model/GLM-5.2-w4a8c8-0716/ \
     --seed 1024 \
     --served-model-name glm-5 \
     --max-model-len 204800 \
-    --additional-config '{"fuse_muls_add": true,"enable_dsa_cp": true, "enable_fused_mc2": true, "multistream_overlap_shared_expert": true, "recompute_scheduler_enable": true, "ascend_compilation_config": {"enable_npugraph_ex": false},"enable_sparse_c8": true, "enable_reshape_optim": true}' \
+    --prefill-context-parallel-size 1 \
+    --decode-context-parallel-size 8 \
+    --cp-kv-cache-interleave-size 128 \
+    --additional-config '{"enable_flashcomm1": true, "enable_dsa_cp": true, "ascend_compilation_config": {"enable_npugraph_ex": false, "enable_static_kernel": false}, "fuse_muls_add": true, "multistream_overlap_shared_expert": true, "enable_mc2_hierarchy_comm": false, "enable_sparse_c8": true, "enable_cpu_binding": true, "recompute_scheduler_enable": false}' \
     --max-num-batched-tokens 4096 \
     --trust-remote-code \
     --max-num-seqs 80 \
@@ -93,34 +93,19 @@ vllm serve /mnt/sfs_turbo/model/GLM-5.2-w4a8c8-0716/ \
     --reasoning-parser glm45 \
     --kv-transfer-config \
     '{
-    "kv_connector": "MultiConnector",
-    "kv_role": "kv_producer",
-    "kv_load_failure_policy": "recompute",
-    "kv_connector_extra_config": {
-        "connectors": [
-            {
-                "kv_connector": "MooncakeConnectorV1",
-                "kv_role": "kv_producer",
-                "kv_port": "30000",
-                "kv_connector_extra_config": {
-                    "prefill": {
-                        "dp_size": 2,
-                        "tp_size": 8
-                    },
-                    "decode": {
-                        "dp_size": 4,
-                        "tp_size": 4
-                    }
-                }
+        "kv_connector": "MooncakeConnectorV1",
+        "kv_role": "kv_producer",
+        "kv_port": "30000",
+        "engine_id": "0",
+        "kv_connector_extra_config": {
+            "use_ascend_direct": true,
+            "prefill": {
+                "dp_size": 2,
+                "tp_size": 8
             },
-            {
-                "kv_connector": "AscendStoreConnector",
-                "kv_role": "kv_producer",
-                "kv_connector_extra_config": {
-                    "lookup_rpc_port":"0",
-                    "backend": "mooncake"
-                }
+            "decode": {
+                "dp_size": 2,
+                "tp_size": 8
             }
-        ]
-    }
+        }
     }' 2>&1 | tee >(grep --line-buffered -E "/metrics|/health|/models" >> "${VLLM_LOG_DIR}/metrics.log") >(grep --line-buffered -v -E "/metrics|/health|/models" >> "${VLLM_LOG_DIR}/vllm.log")

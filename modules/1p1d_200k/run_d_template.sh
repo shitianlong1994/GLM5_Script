@@ -34,7 +34,7 @@ export OMP_PROC_BIND=false
 export OMP_NUM_THREADS=1
 
 export PYTORCH_NPU_ALLOC_CONF=expandable_segments:True
-export HCCL_BUFFSIZE=512
+export HCCL_BUFFSIZE=768
 
 export ASCEND_AGGREGATE_ENABLE=1
 export ASCEND_TRANSPORT_PRINT=1
@@ -43,9 +43,6 @@ export ASCEND_A3_ENABLE=1
 export ASCEND_ENABLE_USE_FABRIC_MEM=1
 # export HCCL_INTRA_ROCE_ENABLE=1
 export VLLM_NIXL_ABORT_REQUEST_TIMEOUT=300000
-export PYTHONHASHSEED=0
-moon_cake_config=$(realpath ../../modules/mooncake.json)
-export MOONCAKE_CONFIG_PATH=$moon_cake_config
 
 
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
@@ -60,7 +57,7 @@ export ASCEND_PROCESS_LOG_PATH=/mnt/sfs_turbo/logs/${INFER_SERVICE_ID}/ascend
 
 export TASK_QUEUE_ENABLE=1
 export ASCEND_RT_VISIBLE_DEVICES=$1
-export VLLM_ASCEND_ENABLE_FUSED_MC2=0
+export VLLM_ASCEND_ENABLE_FUSED_MC2=1
 export VLLM_ASCEND_ENABLE_SFA_KV_QUANT_SPARSE_ATTENTION=1
 export VLLM_ASCEND_ENABLE_SFA_PROLOG_V3=1
 
@@ -86,49 +83,37 @@ vllm serve /mnt/sfs_turbo/model/GLM-5.2-w4a8c8-0716/ \
     --disable-hybrid-kv-cache-manager \
     --max-model-len 204800 \
     --max-num-batched-tokens 128 \
+    --prefill-context-parallel-size 1 \
+    --decode-context-parallel-size 8 \
+    --cp-kv-cache-interleave-size 128 \
     --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY"}' \
-    --additional-config '{"fuse_muls_add": true, "multistream_overlap_shared_expert": true, "enable_fused_mc2": true, "recompute_scheduler_enable": true, "ascend_compilation_config": {"enable_npugraph_ex": false},"enable_sparse_c8": true, "enable_reshape_optim": true}' \
+    --additional-config '{"enable_flashcomm1": false, "enable_dsa_cp": false, "ascend_compilation_config": {"enable_npugraph_ex": true, "enable_static_kernel": false}, "fuse_muls_add": true, "multistream_overlap_shared_expert": true, "enable_mc2_hierarchy_comm": false, "enable_sparse_c8": true, "enable_cpu_binding": true, "recompute_scheduler_enable": true}' \
     --trust-remote-code \
     --speculative-config '{"num_speculative_tokens": 5, "method":"deepseek_mtp","enforce_eager":true}' \
     --max-num-seqs 48 \
     --gpu-memory-utilization 0.92 \
     --async-scheduling \
-    --no-enable-prefix-caching \
+    --enable-prefix-caching \
     --quantization ascend \
     --enable-auto-tool-choice \
     --tool-call-parser glm47 \
     --reasoning-parser glm45 \
     --kv-transfer-config \
     '{
-    "kv_connector": "MultiConnector",
-    "kv_role": "kv_consumer",
-    "kv_load_failure_policy": "recompute",
-    "kv_connector_extra_config": {
-        "connectors": [
-        {
-                "kv_connector": "MooncakeConnectorV1",
-                "kv_role": "kv_consumer",
-                "kv_port": "30200",
-                "kv_connector_extra_config": {
-                    "prefill": {
-                        "dp_size": 2,
-                        "tp_size": 8
-                    },
-                    "decode": {
-                        "dp_size": 4,
-                        "tp_size": 4
-                    }
-                }
+        "kv_connector": "MooncakeConnectorV1",
+        "kv_role": "kv_consumer",
+        "kv_port": "30100",
+        "engine_id": "1",
+        "kv_connector_extra_config": {
+            "use_ascend_direct": true,
+            "prefill": {
+                "dp_size": 2,
+                "tp_size": 8
             },
-            {
-                "kv_connector": "AscendStoreConnector",
-                "kv_role": "kv_consumer",
-                "kv_connector_extra_config": {
-                    "lookup_rpc_port":"0",
-                    "backend": "mooncake"
-                }
+            "decode": {
+                "dp_size": 2,
+                "tp_size": 8
             }
-        ]
-    }
+        }
     }' 2>&1 | tee >(grep --line-buffered -E "/metrics|/health|/models" >> "${VLLM_LOG_DIR}/metrics.log") >(grep --line-buffered -v -E "/metrics|/health|/models" >> "${VLLM_LOG_DIR}/vllm.log")
 

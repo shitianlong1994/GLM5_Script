@@ -1,6 +1,6 @@
 TODAY=$(date +%Y%m%d%H)
-export IMAGE=quay.m.daocloud.io/ascend/vllm-ascend:v0.23.0rc1-a3
-export NAME=glm5_2_suanzhi_0721
+export IMAGE=quay.io/ascend/vllm-ascend:v0.23.0rc1-a3
+export NAME=zjy_0722
 docker run -itd \
     --name $NAME \
     --privileged=true \

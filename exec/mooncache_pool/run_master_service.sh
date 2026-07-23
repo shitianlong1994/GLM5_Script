@@ -1,5 +1,5 @@
 config_path=$(realpath ../../modules/mooncake.json)
-host_ip="${1:-192.168.0.48}"
+host_ip="${1:-192.168.0.203}"
 port=50088  
 if [[ ! -f "$config_path" ]]; then
     echo "错误: 配置文件不存在: $config_path"

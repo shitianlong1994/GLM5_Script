@@ -89,8 +89,8 @@ vllm serve /mnt/sfs_turbo_glm5/model/GLM-5.2-w4a8c8-0716/ \
     --prefill-context-parallel-size 1 \
     --decode-context-parallel-size 8 \
     --cp-kv-cache-interleave-size 128 \
-    --max-num-seqs 48 \
-    --gpu-memory-utilization 0.92 \
+    --max-num-seqs 64 \
+    --gpu-memory-utilization 0.9 \
     --async-scheduling \
     --quantization ascend \
     --enable-auto-tool-choice \

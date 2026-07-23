@@ -76,14 +76,14 @@ vllm serve /mnt/sfs_turbo_glm5/model/GLM-5.2-w4a8c8-0716/ \
     --seed 1024 \
     --served-model-name glm-5 \
     --max-model-len 1024000 \
-    --additional-config '{"recompute_scheduler_enable": false, "enable_dsa_cp": true, "enable_sparse_sfa_c8": true, "enable_sparse_li_c8": true, "c8_enable_reshape_optim": true}' \
+    --additional-config '{"recompute_scheduler_enable": false, "enable_dsa_cp": true, "enable_sparse_sfa_c8": true, "enable_sparse_li_c8": true}' \
     --max-num-batched-tokens 8192 \
     --trust-remote-code \
     --prefill-context-parallel-size 1 \
     --decode-context-parallel-size 16 \
     --cp-kv-cache-interleave-size 128 \
     --no-data-parallel-external-lb \
-    --max-num-seqs 4 \
+    --max-num-seqs 64 \
     --async-scheduling \
     --enable-chunked-prefill \
     --enable-prefix-caching \

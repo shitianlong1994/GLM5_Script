@@ -111,8 +111,8 @@ vllm serve /mnt/sfs_turbo_glm5/model/GLM-5.2-w4a8c8-0716/ \
                         "tp_size": 16
                     },
                     "decode": {
-                        "dp_size": 2,
-                        "tp_size": 8
+                        "dp_size": 4,
+                        "tp_size": 4
                     }
                 }
             },

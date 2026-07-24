@@ -87,7 +87,7 @@ vllm serve /mnt/sfs_turbo_glm5/model/GLM-5.2-w4a8c8-0716/ \
     --trust-remote-code \
     --speculative-config '{"num_speculative_tokens": 5, "method":"deepseek_mtp","enforce_eager":true}' \
     --prefill-context-parallel-size 1 \
-    --decode-context-parallel-size 8 \
+    --decode-context-parallel-size 4 \
     --cp-kv-cache-interleave-size 128 \
     --max-num-seqs 64 \
     --gpu-memory-utilization 0.9 \
@@ -113,8 +113,8 @@ vllm serve /mnt/sfs_turbo_glm5/model/GLM-5.2-w4a8c8-0716/ \
                         "tp_size": 16
                     },
                     "decode": {
-                        "dp_size": 2,
-                        "tp_size": 8
+                        "dp_size": 4,
+                        "tp_size": 4
                     }
                 }
             },

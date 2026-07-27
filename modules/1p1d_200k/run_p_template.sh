@@ -75,7 +75,7 @@ vllm serve /mnt/sfs_turbo_glm5/model/GLM-5.2-w4a8c8-0716/ \
     "torch_profiler_with_stack": false}' \
     --seed 1024 \
     --served-model-name glm-5 \
-    --max-model-len 1024000 \
+    --max-model-len 1048576 \
     --additional-config '{"recompute_scheduler_enable": false, "enable_dsa_cp": true, "enable_sparse_sfa_c8": true, "enable_sparse_li_c8": true}' \
     --max-num-batched-tokens 8192 \
     --trust-remote-code \

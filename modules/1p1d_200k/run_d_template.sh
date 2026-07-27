@@ -80,7 +80,7 @@ vllm serve /mnt/sfs_turbo_glm5/model/GLM-5.2-w4a8c8-0716/ \
     --seed 1024 \
     --served-model-name glm-5 \
     --disable-hybrid-kv-cache-manager \
-    --max-model-len 1024000 \
+    --max-model-len 1048576 \
     --max-num-batched-tokens 128 \
     --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY"}' \
     --additional-config '{"recompute_scheduler_enable": true, "enable_sparse_sfa_c8": true, "enable_sparse_li_c8": true}' \
